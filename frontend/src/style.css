@@ -1,0 +1,90 @@
+/* ── Palette (keep in sync with COLORS in main.js) ───────────────────────── */
+:root {
+    --blue: #41b6e6;   /* standard house */
+    --pink: #db3eb1;   /* hovered / clicked */
+    --gray: #d0d0d0;   /* reserved — not applied yet */
+    --ink:  #2b2b2b;
+}
+
+body {
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    color: var(--ink);
+    margin: 32px auto;
+    max-width: 1040px;
+    padding: 0 20px;
+}
+
+h1 { margin-bottom: 4px; }
+h2 { font-size: 15px; margin: 22px 0 8px; }
+
+.subtitle { margin-top: 0; color: #666; }
+
+.layout {
+    display: flex;
+    gap: 28px;
+    align-items: flex-start;
+}
+
+#map-container svg { display: block; }
+
+/* ── Side panel ──────────────────────────────────────────────────────────── */
+.panel { width: 300px; font-size: 14px; }
+
+.legend div { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.swatch { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+.swatch.base  { background: var(--blue); }
+.swatch.hover { background: var(--pink); }
+
+.hint   { color: #555; line-height: 1.5; }
+.status { font-weight: bold; min-height: 1.2em; }
+
+.swatch.faded { background: var(--blue); opacity: 0.18; }
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+.controls { display: flex; gap: 8px; margin: 12px 0; }
+
+button {
+    font: inherit;
+    padding: 6px 14px;
+    border: 1px solid var(--blue);
+    background: #fff;
+    color: #1d7fa6;
+    border-radius: 4px;
+    cursor: pointer;
+}
+button.active { background: var(--blue); color: #fff; }
+button:disabled { border-color: #ccc; color: #aaa; cursor: default; }
+#erase-btn:not(:disabled) { border-color: var(--pink); color: var(--pink); }
+#erase-btn:not(:disabled):hover { background: var(--pink); color: #fff; }
+
+.details { line-height: 1.6; }
+.details b { display: inline-block; width: 130px; font-weight: normal; color: #666; }
+
+/* ── Tooltip (Lab 2, section 7.1) ────────────────────────────────────────── */
+.tooltip {
+    position: absolute;
+    pointer-events: none;        /* tooltip never captures mouse events */
+    opacity: 0;                  /* hidden by default */
+    background: rgba(0, 0, 0, 0.8);
+    color: #fff;
+    padding: 7px 11px;
+    border-radius: 6px;
+    font-size: 13px;
+    line-height: 1.45;
+    white-space: nowrap;
+    transition: opacity 0.15s ease;
+}
+.tooltip strong { color: var(--pink); }
+
+/* ── Map pieces ──────────────────────────────────────────────────────────── */
+.map-bg   { fill: #f6fafc; }
+.overlay  { fill: transparent; cursor: crosshair; }
+.lasso    {
+    fill: rgba(219, 62, 177, 0.06);
+    stroke: var(--pink);
+    stroke-width: 1.5;
+    stroke-dasharray: 4 3;
+    vector-effect: non-scaling-stroke;   /* outline stays thin when zoomed in */
+    pointer-events: none;
+}
+.axis-note { font-size: 11px; fill: #888; }

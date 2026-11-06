@@ -1,13 +1,52 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
+<head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+    <title>Miami-Dade Houses — Map Prototype</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    <h1>Miami-Dade Houses</h1>
+    <p class="subtitle">Each dot is one house, placed by its latitude and longitude.</p>
+
+    <div class="layout">
+        <!-- D3 draws the map into this div -->
+        <div id="map-container"></div>
+
+        <aside class="panel">
+            <div class="legend">
+                <div><span class="swatch base"></span>House</div>
+                <div><span class="swatch hover"></span>Hovered / clicked / lassoed</div>
+                <div><span class="swatch faded"></span>Outside lasso</div>
+            </div>
+
+            <p class="hint">
+                <strong>Hover</strong> a house for details ·
+                <strong>click</strong> to pin it ·
+                <strong>drag</strong> to lasso (Lasso mode) or pan (Pan mode) ·
+                <strong>scroll</strong> to zoom ·
+                <strong>Esc</strong> erases the selection
+            </p>
+
+            <div class="controls">
+                <button id="mode-lasso">Lasso</button>
+                <button id="mode-pan">Pan</button>
+                <button id="reset-zoom">Reset zoom</button>
+            </div>
+
+            <p id="status" class="status">Loading houses…</p>
+            <button id="erase-btn" disabled>Erase selection</button>
+
+            <h2>Clicked house</h2>
+            <div id="details" class="details">Click a house on the map.</div>
+        </aside>
+    </div>
+
+    <!-- Tooltip that follows the pointer (Lab 2, section 7) -->
+    <div id="tooltip" class="tooltip"></div>
+
+    <!-- Load D3 v7 from the CDN, then our own script (Lab 2, section 3) -->
+    <script type="module" src="/src/main.js"></script>
+</body>
 </html>
