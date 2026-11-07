@@ -1,37 +1,32 @@
-// ════════════════════════════════════════════════════════════════════════════
-//  Miami-Dade houses — interactive map prototype
-//  Plain HTML + D3 v7, same setup as Lab 2. Open index.html with Live Server.
-// ════════════════════════════════════════════════════════════════════════════
+// Assignment #2: Miami housing prices
 
 import * as d3 from "d3";
 import "./style.css";
 
-// ── 0. Palette ──────────────────────────────────────────────────────────────
+// Color palette 
 const COLORS = {
-    blue: "#41b6e6",   // standard house
-    pink: "#db3eb1",   // hovered / clicked house
-    gray: "#d0d0d0",   // reserved for later (e.g. houses outside a selection) — not applied yet
+    blue: "#41b6e6", // standard house
+    pink: "#db3eb1", // selected house
+    gray: "#d0d0d0", // reserved for later (e.g. houses outside a selection) — not applied yet
 };
 
-// ── 1. Settings ─────────────────────────────────────────────────────────────
-// Path is relative to this folder. Once the Flask backend is running, swap this
-// for the API, e.g. "http://127.0.0.1:5001/api/houses" (and d3.json instead of d3.csv).
+// Backend path
 const DATA_URL = "http://127.0.0.1:5001/api/houses";
 
 const WIDTH = 620;
 const HEIGHT = 760;
-const PADDING = 24;        // space between the outermost houses and the SVG edge
-const RADIUS = 2.5;        // normal dot
-const RADIUS_ACTIVE = 6;   // hovered / clicked dot
-const HIT_RADIUS = 10;     // how close (px) the pointer must be to "hit" a house
-const FADED_OPACITY = 0.15;  // houses outside the lasso (gray comes later)
-const LASSO_MIN_MOVE = 5;    // px the pointer must travel before a drag counts as a lasso
-const ZOOM_LIMITS = [1, 12]; // min / max zoom factor
+const PADDING = 24; // space between the outermost houses and SVG edge
+const RADIUS = 2.5; // standard dot
+const RADIUS_ACTIVE = 6; // hovered vs. clicked dot
+const HIT_RADIUS = 10; // how close pointer must be to select a house
+const FADED_OPACITY = 0.15; // houses outside the lasso
+const LASSO_MIN_MOVE = 5; // distance pointer has to travel before a drag counts as a lasso
+const ZOOM_LIMITS = [1, 12]; // zoom factor
 
 const fmtPrice = d3.format("$,.0f");
 const fmtInt = d3.format(",.0f");
 
-// ── 2. SVG canvas (Lab 2, section 4) ────────────────────────────────────────
+// SVG canvas
 const svg = d3.select("#map-container")
     .append("svg")
     .attr("width", WIDTH)
@@ -48,18 +43,18 @@ const tooltip = d3.select("#tooltip");
 const statusEl = d3.select("#status");
 const detailsEl = d3.select("#details");
 
-// ── 3. Shared state — the one source of truth every update reads ────────────
+// Shared state
 const state = {
     hoveredId: null,
     clickedId: null,
-    lassoIds: null,              // Set of lassoed house ids, or null when nothing is lassoed
-    mode: "lasso",               // what a drag does: "lasso" or "pan"
-    transform: d3.zoomIdentity,  // current zoom and pan
+    lassoIds: null, // Set of lassoed house ids or null when nothing lassoed
+    mode: "lasso", // Differentiates what a drag does (i.e. lasso vs pan)
+    transform: d3.zoomIdentity, // Current zoom and pan
 };
 
-// ── 4. Load the data ────────────────────────────────────────────────────────
-// The row function converts text to numbers but keeps PARCELNO as a string,
-// so IDs match exactly (A1 hint). Works with the saved sample or the full CSV.
+// Load data
+
+// Keeps PARCELNO as a string; works with the saved sample or the full CSV.
 d3.json(DATA_URL).then(rows => rows.map(row => ({
     id: row.PARCELNO,
     lat: +row.LATITUDE,
@@ -67,7 +62,6 @@ d3.json(DATA_URL).then(rows => rows.map(row => ({
     price: +row.SALE_PRC,
     area: +row.TOT_LVG_AREA,
     yearBuilt: row.year_built ? +row.year_built : 2016 - +row.age,
-    waterDist: +row.WATER_DIST,
     oceanDist: +row.OCEAN_DIST,
 })))
     .then(drawMap)
@@ -77,24 +71,23 @@ d3.json(DATA_URL).then(rows => rows.map(row => ({
                       `you opened the page with Live Server, not by double-clicking it.`);
     });
 
-// ── 5. Draw the map ─────────────────────────────────────────────────────────
+// Map
 function drawMap(houses) {
-    // Projection: Mercator, fitted so every house fits inside the padded canvas.
-    // D3 takes [longitude, latitude] — the opposite order from Folium.
+    // Projection: Mercator
     const projection = d3.geoMercator().fitExtent(
         [[PADDING, PADDING], [WIDTH - PADDING, HEIGHT - PADDING]],
         { type: "MultiPoint", coordinates: houses.map(d => [d.lon, d.lat]) }
     );
 
-    // Project every house once and keep its pixel position on the record
+    // Project every house once
     houses.forEach(d => {
         [d.x, d.y] = projection([d.lon, d.lat]);
     });
 
-    // Lookup table: id -> house record
+    // Lookup table
     const byId = new Map(houses.map(d => [d.id, d]));
 
-    // One circle per house; the key function keeps identity stable (A2 hint)
+    // One circle per house
     const dots = dotLayer.selectAll("circle")
         .data(houses, d => d.id)
         .join("circle")
@@ -122,30 +115,31 @@ function drawMap(houses) {
     function houseAt(event) {
         const [mx, my] = mapPoint(event);
         const nearest = houses[delaunay.find(mx, my)];
-        // distance in screen pixels, so the hit area feels the same at any zoom
+
+        // Rescales circle size for zooming
         const distance = Math.hypot(nearest.x - mx, nearest.y - my) * state.transform.k;
         return distance <= HIT_RADIUS ? nearest : null;
     }
 
-    // Transparent overlay on top of the dots catches every pointer event
+    // Transparent overlay catches every pointer event
     const overlay = svg.append("rect")
         .attr("class", "overlay")
         .attr("width", WIDTH)
         .attr("height", HEIGHT)
         .on("pointerdown", event => {
             if (state.mode !== "lasso" || event.button !== 0) return;
-            lassoPath.interrupt().attr("opacity", 1);           // cancel a fade still running
+            lassoPath.interrupt().attr("opacity", 1); // cancel currently running fade
             lassoPoints = [mapPoint(event)];
-            overlay.node().setPointerCapture(event.pointerId);  // keep events if the drag leaves the map
+            overlay.node().setPointerCapture(event.pointerId); // keep current lasso event
         })
         .on("pointermove", event => {
-            if (lassoPoints) {                                  // drawing a lasso (Lab 3, section 3)
+            if (lassoPoints) { // Lab 3
                 lassoPoints.push(mapPoint(event));
                 lassoPath.attr("d", d3.line()(lassoPoints) + "Z");
                 hideTooltip();
                 return;
             }
-            const house = houseAt(event);                       // otherwise: hover
+            const house = houseAt(event);
             const id = house ? house.id : null;
             if (id !== state.hoveredId) {
                 state.hoveredId = id;
@@ -165,8 +159,7 @@ function drawMap(houses) {
                 );
                 suppressClick = true;
 
-                // Like Lab 3: the outline goes away after 1 second.
-                // Like Lab 4: it fades out with a transition instead of vanishing.
+                // Lab 3 and 4 transitions
                 lassoPath.transition()
                     .delay(0)
                     .duration(400)
@@ -174,7 +167,7 @@ function drawMap(houses) {
                     .attr("opacity", 0)
                     .on("end", () => lassoPath.attr("d", null).attr("opacity", 1));
             } else {
-                lassoPath.attr("d", null);   // too short to be a lasso: treat it as a click
+                lassoPath.attr("d", null); // click vs. lasso distinction
             }
             lassoPoints = null;
             render();
@@ -190,13 +183,13 @@ function drawMap(houses) {
                 return;
             }
             const house = houseAt(event);
-            // Clicking the pinned house again, or empty space, unpins it
+            // Reclicking pinned house or empty space unselects it
             state.clickedId = house && house.id !== state.clickedId ? house.id : null;
             render();
         });
 
-    // ── Zoom and pan (Lab 3, section 4) ─────────────────────────────────────
-    // Scroll always zooms. Dragging pans only in Pan mode; in Lasso mode it draws.
+    // Zoom and pan
+    // Scroll ALWAYS zooms; dragging pans only in Pan mode
     const zoom = d3.zoom()
         .scaleExtent(ZOOM_LIMITS)
         .translateExtent([[0, 0], [WIDTH, HEIGHT]])
@@ -204,14 +197,14 @@ function drawMap(houses) {
                          (state.mode === "pan" && event.type === "mousedown" && event.button === 0))
         .on("zoom", event => {
             state.transform = event.transform;
-            dotLayer.attr("transform", event.transform);  // transform the group, never the SVG (A1 Task 6.4)
+            dotLayer.attr("transform", event.transform); // transform group, NOT SVG
             hideTooltip();
             render();
         });
 
     overlay.call(zoom);
 
-    // ── Buttons and keyboard ────────────────────────────────────────────────
+    //  Buttons and keyboard
     function setMode(mode) {
         state.mode = mode;
         d3.select("#mode-lasso").classed("active", mode === "lasso");
@@ -230,7 +223,7 @@ function drawMap(houses) {
     d3.select("#mode-pan").on("click", () => setMode("pan"));
     d3.select("#erase-btn").on("click", eraseSelection);
     d3.select("#reset-zoom").on("click", () => {
-        overlay.transition()                 // smooth reset (Lab 4 transitions)
+        overlay.transition() // smooth reset from Lab 4
             .duration(600)
             .ease(d3.easeCubicOut)
             .call(zoom.transform, d3.zoomIdentity);
@@ -242,9 +235,9 @@ function drawMap(houses) {
 
     setMode("lasso");
 
-    // ── 6. Render: restyle every dot from the shared state ──────────────────
+    // Restyle every dot from the shared state ──────────────────
     function render() {
-        const k = state.transform.k;   // divide sizes by the zoom so dots stay the same size on screen
+        const k = state.transform.k;   //  dots stay same size onscreen
         const isActive = d => d.id === state.hoveredId || d.id === state.clickedId;
         const inLasso = d => !state.lassoIds || state.lassoIds.has(d.id);
         const isLassoed = d => state.lassoIds !== null && state.lassoIds.has(d.id);
@@ -253,12 +246,18 @@ function drawMap(houses) {
             .attr("fill-opacity", d => isActive(d) ? 1 : inLasso(d) ? 0.75 : FADED_OPACITY)
             .attr("r", d => (isActive(d) ? RADIUS_ACTIVE : RADIUS) / k);
 
-        // Draw pink dots on top so neighbours never cover them
+        // Draw pink dots on top so neighbors are never covered
         dots.filter(isActive).raise();
 
-        statusEl.text(state.lassoIds
-            ? `${fmtInt(state.lassoIds.size)} of ${fmtInt(houses.length)} houses selected`
-            : `${fmtInt(houses.length)} houses`);
+        if (state.lassoIds) {
+            const selected = houses.filter(d => state.lassoIds.has(d.id));
+            statusEl.text(selected.length
+                ? `Average price ${fmtPrice(d3.mean(selected, d => d.price))} • ` +
+                  `${fmtInt(selected.length)} of ${fmtInt(houses.length)} houses selected`
+                : "No houses inside this lasso");
+        } else {
+            statusEl.text(`${fmtInt(houses.length)} houses`);
+        }
         d3.select("#erase-btn").property("disabled", !state.lassoIds && !state.clickedId);
 
         showDetails(byId.get(state.clickedId));
@@ -271,8 +270,8 @@ function drawMap(houses) {
 function showTooltip(event, d) {
     tooltip
         .html(`<strong>${fmtPrice(d.price)}</strong><br>
-               ${fmtInt(d.area)} sq ft · built ${d.yearBuilt}<br>
-               ${fmtInt(d.waterDist)} ft to water`)
+               ${fmtInt(d.area)} sq ft • built ${d.yearBuilt}<br>
+               ${fmtInt(d.oceanDist)} ft to the ocean`)
         .style("opacity", 1);
 
     const box = tooltip.node().getBoundingClientRect();
@@ -291,7 +290,8 @@ function hideTooltip() {
     tooltip.style("opacity", 0);
 }
 
-// // ── 8. Details panel for the clicked house ──────────────────────────────────
+// Left over house details from defunct scaffolding
+
 // function showDetails(d) {
 //     if (!d) {
 //         detailsEl.html("Click a house on the map.");

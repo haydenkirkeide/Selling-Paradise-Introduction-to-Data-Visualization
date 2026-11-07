@@ -63,8 +63,8 @@ button:disabled { border-color: #ccc; color: #aaa; cursor: default; }
 /* ── Tooltip (Lab 2, section 7.1) ────────────────────────────────────────── */
 .tooltip {
     position: absolute;
-    pointer-events: none;        /* tooltip never captures mouse events */
-    opacity: 0;                  /* hidden by default */
+    pointer-events: none;
+    opacity: 0;
     background: rgba(0, 0, 0, 0.8);
     color: #fff;
     padding: 7px 11px;

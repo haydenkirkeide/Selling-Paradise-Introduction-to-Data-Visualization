@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Miami-Dade Houses — Map Prototype</title>
+    <title>Selling Paradise </title>
     <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-    <h1>Miami-Dade Houses</h1>
-    <p class="subtitle">Each dot is one house, placed by its latitude and longitude.</p>
+    <h1>Selling Paradise: Visualizing Prices of Miami Housing</h1>
+    <p class="subtitle">Each circle is a house organized by its latitude and longitude coordinates. <ul><li>To select one house, click on a house to view its basic information.</li> <li> To select multiple, click and drag your mouse around a group of houses.</li></ul></p>
 
     <div class="layout">
-        <!-- D3 draws the map into this div -->
+        <!-- D3 draws map into this section -->
         <div id="map-container"></div>
 
         <aside class="panel">
@@ -22,11 +22,11 @@
             </div>
 
             <p class="hint">
-                <strong>Hover</strong> a house for details ·
-                <strong>click</strong> to pin it ·
-                <strong>drag</strong> to lasso (Lasso mode) or pan (Pan mode) ·
-                <strong>scroll</strong> to zoom ·
-                <strong>Esc</strong> erases the selection
+                <strong>Hover</strong> over a house for details •
+                <strong>click</strong> to select it •
+                <strong>drag</strong> to lasso (Lasso mode) or pan (Pan mode) •
+                <strong>scroll</strong> to zoom •
+                <strong>Press escape</strong> or <strong>click outside of the lassoed houses</strong> to erase your selection
             </p>
 
             <div class="controls">
@@ -43,10 +43,10 @@
         </aside>
     </div>
 
-    <!-- Tooltip that follows the pointer (Lab 2, section 7) -->
+    <!-- Tooltip -->
     <div id="tooltip" class="tooltip"></div>
 
-    <!-- Load D3 v7 from the CDN, then our own script (Lab 2, section 3) -->
+    <!-- Load D3 -->
     <script type="module" src="/src/main.js"></script>
 </body>
 </html>
