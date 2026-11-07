@@ -2,8 +2,11 @@
 
 import * as d3 from "d3";
 import "./style.css";
+import { createOceanView } from "./oceanView.js";
+import { createDecadeView } from "./decadeView.js";
+import { createFeatureView } from "./featureView.js";
 
-// Color palette 
+// Color palette
 const COLORS = {
     blue: "#41b6e6", // standard house
     pink: "#db3eb1", // selected house
@@ -13,8 +16,10 @@ const COLORS = {
 // Backend path
 const DATA_URL = "http://127.0.0.1:5001/api/houses";
 
-const WIDTH = 620;
-const HEIGHT = 760;
+// The map fills allotted space on page (measure once --> scaled by viewBox)
+const mapBox = document.getElementById("map-container").getBoundingClientRect();
+const WIDTH = Math.round(mapBox.width);
+const HEIGHT = Math.round(mapBox.height);
 const PADDING = 24; // space between the outermost houses and SVG edge
 const RADIUS = 2.5; // standard dot
 const RADIUS_ACTIVE = 6; // hovered vs. clicked dot
@@ -23,14 +28,22 @@ const FADED_OPACITY = 0.15; // houses outside the lasso
 const LASSO_MIN_MOVE = 5; // distance pointer has to travel before a drag counts as a lasso
 const ZOOM_LIMITS = [1, 12]; // zoom factor
 
+// Landmark labels, placed at real coordinates (approximate centers)
+const LANDMARKS = [
+    { name: "Atlantic Ocean", lat: 25.80, lon: -80.085, kind: "water", rotate: -72 },
+    { name: "Biscayne Bay",   lat: 25.60, lon: -80.20,  kind: "water", rotate: -65 },
+    { name: "Everglades",     lat: 25.70, lon: -80.62,  kind: "land",  rotate: 0 },
+];
+
 const fmtPrice = d3.format("$,.0f");
 const fmtInt = d3.format(",.0f");
 
 // SVG canvas
 const svg = d3.select("#map-container")
     .append("svg")
-    .attr("width", WIDTH)
-    .attr("height", HEIGHT);
+    .attr("viewBox", `0 0 ${WIDTH} ${HEIGHT}`) // drawing units; scales w/ window
+    .attr("width", "100%")
+    .attr("height", "100%");
 
 svg.append("rect")
     .attr("class", "map-bg")
@@ -47,14 +60,15 @@ const detailsEl = d3.select("#details");
 const state = {
     hoveredId: null,
     clickedId: null,
-    lassoIds: null, // Set of lassoed house ids or null when nothing lassoed
-    mode: "lasso", // Differentiates what a drag does (i.e. lasso vs pan)
-    transform: d3.zoomIdentity, // Current zoom and pan
+    lassoIds: null, // set of selected house ids (lasso or brush) or null when nothing selected
+    selectionSource: null, // which view made the selection: "lasso", "ocean", "decade", "feature", or null
+    mode: "lasso", // differentiates what a drag does (i.e. lasso vs pan)
+    transform: d3.zoomIdentity, // current zoom and pan
 };
 
 // Load data
 
-// Keeps PARCELNO as a string; works with the saved sample or the full CSV.
+// Keeps PARCELNO as a string; works w/ saved sample OR full CSV
 d3.json(DATA_URL).then(rows => rows.map(row => ({
     id: row.PARCELNO,
     lat: +row.LATITUDE,
@@ -63,12 +77,12 @@ d3.json(DATA_URL).then(rows => rows.map(row => ({
     area: +row.TOT_LVG_AREA,
     yearBuilt: row.year_built ? +row.year_built : 2016 - +row.age,
     oceanDist: +row.OCEAN_DIST,
+    featVal: +row.SPEC_FEAT_VAL,
 })))
     .then(drawMap)
     .catch(error => {
         console.error(error);
-        statusEl.text(`Could not load ${DATA_URL}. Check that the file exists and that ` +
-                      `you opened the page with Live Server, not by double-clicking it.`);
+        statusEl.text(`Could not load ${DATA_URL}. Check that the file exists and the connection is not broken.`);
     });
 
 // Map
@@ -84,6 +98,67 @@ function drawMap(houses) {
         [d.x, d.y] = projection([d.lon, d.lat]);
     });
 
+    // Edge of development: a dashed line through the westernmost houses.
+    // The map is cut into thin north-south bands; in each band the line passes the
+    // point only 2% of houses lie west of, so one stray house can't make a spike.
+    const BANDS = 24;
+    const [yMin, yMax] = d3.extent(houses, d => d.y);
+    const bandOf = d => Math.min(BANDS - 1, Math.floor((d.y - yMin) / (yMax - yMin) * BANDS));
+    const edgePoints = d3.groups(houses, bandOf)
+        .filter(([, band]) => band.length >= 4)               // skip near-empty bands
+        .map(([, band]) => [
+            d3.quantile(band.map(d => d.x).sort(d3.ascending), 0.02),
+            d3.mean(band, d => d.y),
+        ])
+        .sort((a, b) => a[1] - b[1]);                        // north to south
+
+    dotLayer.insert("path", "circle")                        // under the houses, zooms with them
+        .attr("class", "edge-line")
+        .attr("d", d3.line().curve(d3.curveBasis)(edgePoints));
+
+    // Its label sits just west of the line's middle, turned to follow the line
+    const mid = Math.floor(edgePoints.length / 2);
+    const [ax, ay] = edgePoints[mid + 1];                     // a bit further south
+    const [bx, by] = edgePoints[mid - 1];                     // a bit further north
+    const len = Math.hypot(bx - ax, by - ay);
+    const edgeLabel = {
+        name: "Edge of development",
+        kind: "edge",
+        lat: null,                                            // placed from the line, not lat/lon
+        lon: null,
+        px: edgePoints[mid][0] + (by - ay) / len * 14,       // 14 px to the west of the line
+        py: edgePoints[mid][1] - (bx - ax) / len * 14,
+        rotate: Math.atan2(by - ay, bx - ax) * 180 / Math.PI,
+    };
+
+    // Landmark labels: same projection as the houses, drawn underneath them.
+    // Kept inside the map's edges so they stay visible on narrower screens.
+    LANDMARKS.forEach(d => {
+        const [px, py] = projection([d.lon, d.lat]);
+        d.x = Math.max(70, Math.min(WIDTH - 70, px));
+        d.y = Math.max(70, Math.min(HEIGHT - 70, py));
+    });
+
+    edgeLabel.x = edgeLabel.px;
+    edgeLabel.y = edgeLabel.py;
+
+    const landmarkLabels = svg.insert("g", ".houses")
+        .attr("class", "landmarks")
+        .selectAll("text")
+        .data([...LANDMARKS, edgeLabel])
+        .join("text")
+        .attr("class", d => `landmark ${d.kind}`)
+        .attr("text-anchor", "middle")
+        .text(d => d.name);
+
+    // Labels move with zoom/pan but keep the same text size on screen
+    function placeLandmarks() {
+        landmarkLabels.attr("transform", d => {
+            const [sx, sy] = state.transform.apply([d.x, d.y]);
+            return `translate(${sx},${sy}) rotate(${d.rotate})`;
+        });
+    }
+
     // Lookup table
     const byId = new Map(houses.map(d => [d.id, d]));
 
@@ -96,16 +171,15 @@ function drawMap(houses) {
         .attr("r", RADIUS)
         .attr("fill", COLORS.blue)
         .attr("fill-opacity", 0.75)
-        .attr("pointer-events", "none");   // the overlay below handles the mouse
+        .attr("pointer-events", "none"); // overlay handles mouse
 
-    // Nearest-house finder: easier to hit than 2.5 px circles
+    // Nearest-house finder
     const delaunay = d3.Delaunay.from(houses, d => d.x, d => d.y);
 
-    // Lasso outline. It lives inside the zoomed layer, in map coordinates, so it
-    // stays on the right houses when you zoom or pan afterwards.
+    // Lasso outline (resides inside zoomed layer in map coordinates --> stays on the right houses when you zoom or pan afterwards
     const lassoPath = dotLayer.append("path").attr("class", "lasso");
-    let lassoPoints = null;     // map-coordinate points while drawing; null otherwise
-    let suppressClick = false;  // the click that ends a lasso drag is not a real click
+    let lassoPoints = null; // map-coordinate points while drawing; null otherwise
+    let suppressClick = false; // click that ends a lasso drag =/= real click
 
     // Pointer position converted back to un-zoomed map coordinates
     function mapPoint(event) {
@@ -153,11 +227,12 @@ function drawMap(houses) {
             const [x0, y0] = lassoPoints[0];
             const movedPx = d3.max(lassoPoints, ([x, y]) => Math.hypot(x - x0, y - y0)) * state.transform.k;
 
-                        if (movedPx >= LASSO_MIN_MOVE) {
+            if (movedPx >= LASSO_MIN_MOVE) {
                 state.lassoIds = new Set(
                     houses.filter(d => d3.polygonContains(lassoPoints, [d.x, d.y])).map(d => d.id)
                 );
                 suppressClick = true;
+                state.selectionSource = "lasso";
 
                 // Lab 3 and 4 transitions
                 lassoPath.transition()
@@ -214,8 +289,9 @@ function drawMap(houses) {
 
     function eraseSelection() {
         state.lassoIds = null;
+        state.selectionSource = null;
         state.clickedId = null;
-        lassoPolygon = null;
+        lassoPath.interrupt().attr("d", null).attr("opacity", 1); // also cancels a fade in progress
         render();
     }
 
@@ -235,9 +311,9 @@ function drawMap(houses) {
 
     setMode("lasso");
 
-    // Restyle every dot from the shared state ──────────────────
+    // Restyle every dot from shared state
     function render() {
-        const k = state.transform.k;   //  dots stay same size onscreen
+        const k = state.transform.k; // dots remain same size onscreen
         const isActive = d => d.id === state.hoveredId || d.id === state.clickedId;
         const inLasso = d => !state.lassoIds || state.lassoIds.has(d.id);
         const isLassoed = d => state.lassoIds !== null && state.lassoIds.has(d.id);
@@ -246,33 +322,94 @@ function drawMap(houses) {
             .attr("fill-opacity", d => isActive(d) ? 1 : inLasso(d) ? 0.75 : FADED_OPACITY)
             .attr("r", d => (isActive(d) ? RADIUS_ACTIVE : RADIUS) / k);
 
-        // Draw pink dots on top so neighbors are never covered
+        // Draw pink dots on top --> neighbors are never covered
         dots.filter(isActive).raise();
+
+        placeLandmarks();
 
         if (state.lassoIds) {
             const selected = houses.filter(d => state.lassoIds.has(d.id));
             statusEl.text(selected.length
                 ? `Average price ${fmtPrice(d3.mean(selected, d => d.price))} • ` +
+                  `Average age ${Math.round(d3.mean(selected, d => 2016 - d.yearBuilt))} years • ` +
                   `${fmtInt(selected.length)} of ${fmtInt(houses.length)} houses selected`
-                : "No houses inside this lasso");
+                : "No houses in this selection");
         } else {
             statusEl.text(`${fmtInt(houses.length)} houses`);
         }
         d3.select("#erase-btn").property("disabled", !state.lassoIds && !state.clickedId);
 
+        decade.update(state);
+        ocean.update(state);
+        feature.update(state);
         showDetails(byId.get(state.clickedId));
     }
+
+    // Selection made in a smaller view (brush or bar click) replaces any lasso
+    function selectFromView(source, ids) {
+        if (ids) {
+            state.lassoIds = ids;
+            state.selectionSource = source;
+            lassoPath.interrupt().attr("d", null).attr("opacity", 1);
+        } else if (state.selectionSource === source) {
+            state.lassoIds = null;
+            state.selectionSource = null;
+        }
+        render();
+    }
+
+    // Hovering on house in inset view highlights it everywhere
+    function hoverFromView(house, event) {
+        const id = house ? house.id : null;
+        if (id !== state.hoveredId) {
+            state.hoveredId = id;
+            render();
+        }
+        if (house) showTooltip(event, house);
+        else hideTooltip();
+    }
+
+    // Clicking house in a smaller view pins that house like clicking it on map (click it or empty space to unpin)
+    function pinFromView(house) {
+        state.clickedId = house && house.id !== state.clickedId ? house.id : null;
+        render();
+    }
+
+    // Age progression view: 
+    const decade = createDecadeView(d3.select("#decade-view"), houses, {
+        colors: COLORS,
+        onSelect: ids => selectFromView("decade", ids),
+        onBarHover: (html, event) => html ? showTooltipHtml(event, html) : hideTooltip(),
+    });
+
+    const ocean = createOceanView(d3.select("#ocean-view"), houses, {
+        colors: COLORS,
+        onBrush: ids => selectFromView("ocean", ids),
+        onHover: hoverFromView,
+        onPin: pinFromView,
+    });
+
+    const feature = createFeatureView(d3.select("#feature-view"), houses, {
+        colors: COLORS,
+        onSelect: ids => selectFromView("feature", ids),
+        onHover: hoverFromView,
+        onPin: pinFromView,
+    });
 
     render();
 }
 
 // ── 7. Tooltip (Lab 2, section 7), flipped near the window edges ────────────
 function showTooltip(event, d) {
-    tooltip
-        .html(`<strong>${fmtPrice(d.price)}</strong><br>
+    showTooltipHtml(event, `<strong>${fmtPrice(d.price)}</strong><br>
                ${fmtInt(d.area)} sq ft • built ${d.yearBuilt}<br>
-               ${fmtInt(d.oceanDist)} ft to the ocean`)
-        .style("opacity", 1);
+               ${(d.oceanDist / 5280).toFixed(1)} mi to the ocean<br>
+               ${fmtPrice(d.featVal)} in special features`);
+}
+
+// Shows any text in the tooltip (also used by the decade bars)
+function showTooltipHtml(event, html) {
+    tooltip.html(html).style("opacity", 1);
 
     const box = tooltip.node().getBoundingClientRect();
     const rightEdge = window.scrollX + window.innerWidth;
@@ -290,20 +427,19 @@ function hideTooltip() {
     tooltip.style("opacity", 0);
 }
 
-// Left over house details from defunct scaffolding
-
-// function showDetails(d) {
-//     if (!d) {
-//         detailsEl.html("Click a house on the map.");
-//         return;
-//     }
-//     detailsEl.html(`
-//         <b>Sale price</b>${fmtPrice(d.price)}<br>
-//         <b>Living area</b>${fmtInt(d.area)} sq ft<br>
-//         <b>Year built</b>${d.yearBuilt}<br>
-//         <b>Distance to water</b>${fmtInt(d.waterDist)} ft<br>
-//         <b>Distance to ocean</b>${fmtInt(d.oceanDist)} ft<br>
-//         <b>Parcel no.</b>${d.id}<br>
-//         <b>Lat / lon</b>${d.lat.toFixed(4)}, ${d.lon.toFixed(4)}
-//     `);
-// }
+// Clicked-house details (the water-distance line was removed with WATER_DIST)
+function showDetails(d) {
+    if (!d) {
+        detailsEl.html("Click a house on the map.");
+        return;
+    }
+    detailsEl.html(`
+        <b>Sale price</b>${fmtPrice(d.price)}<br>
+        <b>Living area</b>${fmtInt(d.area)} sq ft<br>
+        <b>Year built</b>${d.yearBuilt}<br>
+        <b>Distance to ocean</b>${(d.oceanDist / 5280).toFixed(1)} mi<br>
+        <b>Special features</b>${fmtPrice(d.featVal)}<br>
+        <b>Parcel no.</b>${d.id}<br>
+        <b>Lat / lon</b>${d.lat.toFixed(4)}, ${d.lon.toFixed(4)}
+    `);
+}

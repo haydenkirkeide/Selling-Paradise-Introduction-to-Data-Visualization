@@ -1,26 +1,23 @@
+<!-- Assignment 2: localhost index file --> 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Selling Paradise </title>
-    <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-    <h1>Selling Paradise: Visualizing Prices of Miami Housing</h1>
-    <p class="subtitle">Each circle is a house organized by its latitude and longitude coordinates. <ul><li>To select one house, click on a house to view its basic information.</li> <li> To select multiple, click and drag your mouse around a group of houses.</li></ul></p>
-
-    <div class="layout">
-        <!-- D3 draws map into this section -->
-        <div id="map-container"></div>
-
-        <aside class="panel">
-            <div class="legend">
-                <div><span class="swatch base"></span>House</div>
-                <div><span class="swatch hover"></span>Hovered / clicked / lassoed</div>
-                <div><span class="swatch faded"></span>Outside lasso</div>
+    <div class="app">
+        <header class="page-header">
+            <h1>Selling Paradise: Visualizing Prices of Miami Housing</h1>
+            <div class="subtitle">
+                Each circle is a house organized by its latitude and longitude coordinates.
+                <ul>
+                    <li>To select one house, click on a house to view its basic information.</li>
+                    <li>To select multiple, click and drag your mouse around a group of houses.</li>
+                </ul>
             </div>
-
             <p class="hint">
                 <strong>Hover</strong> over a house for details •
                 <strong>click</strong> to select it •
@@ -28,19 +25,67 @@
                 <strong>scroll</strong> to zoom •
                 <strong>Press escape</strong> or <strong>click outside of the lassoed houses</strong> to erase your selection
             </p>
+        </header>
 
-            <div class="controls">
-                <button id="mode-lasso">Lasso</button>
-                <button id="mode-pan">Pan</button>
-                <button id="reset-zoom">Reset zoom</button>
-            </div>
+        <main class="dashboard">
+            <!-- Left: the map (~68% of the width) -->
+            <section class="map-column">
+                <div class="toolbar">
+                    <div class="controls">
+                        <button id="mode-lasso">Lasso</button>
+                        <button id="mode-pan">Pan</button>
+                        <button id="reset-zoom">Reset zoom</button>
+                        <button id="erase-btn" disabled>Erase selection</button>
+                    </div>
+                    <div class="legend">
+                        <div><span class="swatch base"></span>House</div>
+                        <div><span class="swatch hover"></span>Hovered / clicked / selected</div>
+                        <div><span class="swatch faded"></span>Outside selection</div>
+                    </div>
+                    <p id="status" class="status">Loading houses…</p>
+                </div>
 
-            <p id="status" class="status">Loading houses…</p>
-            <button id="erase-btn" disabled>Erase selection</button>
+                <!-- D3 draws map into this section -->
+                <div id="map-container">
+                    <!-- Clicked house card, top-left corner of the map -->
+                    <div class="details-card">
+                        <h2>Clicked house</h2>
+                        <div id="details" class="details">Click a house on the map.</div>
+                    </div>
+                </div>
+            </section>
 
-            <h2>Clicked house</h2>
-            <div id="details" class="details">Click a house on the map.</div>
-        </aside>
+            <!-- Age Progression view -->
+            <aside class="views">
+                <section class="view-panel">
+                    <h2>Age Progression: Houses by decade built</h2>
+                    <div id="decade-view" class="chart"></div>
+                    <p class="caption">
+                        Bars count houses by the decade they were built. Click a bar to light up
+                        those houses on the map; click it again to clear. Pink shows the current selection.
+                    </p>
+                </section>
+                <!-- Ocean Distance view -->
+                <section class="view-panel">
+                    <h2>Ocean Distance: Price vs. distance to the ocean</h2>
+                    <div id="ocean-view" class="chart"></div>
+                    <p class="caption">
+                        Each dot is a house. Drag across the chart to select a distance range;
+                        the corresponding houses light up on the map. Price uses a log scale.
+                    </p>
+                </section>
+                <!-- Special feature valuations view -->
+                <section class="view-panel">
+                    <h2>Special Feature View: Special features effect on price</h2>
+                    <div id="feature-view" class="chart"></div>
+                    <p class="caption">
+                        Each dot is a house; bigger dots are bigger homes. Drag a loop around dots to
+                        select those houses on the map. Houses with no special features sit in the
+                        "None" strip. Both axes use log scales.
+                    </p>
+                </section>
+            </aside>
+        </main>
     </div>
 
     <!-- Tooltip -->

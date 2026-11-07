@@ -1,47 +1,122 @@
-/* ── Palette (keep in sync with COLORS in main.js) ───────────────────────── */
+/* Palette */
 :root {
-    --blue: #41b6e6;   /* standard house */
-    --pink: #db3eb1;   /* hovered / clicked */
-    --gray: #d0d0d0;   /* reserved — not applied yet */
+    --blue: #41b6e6; /* standard house */
+    --pink: #db3eb1; /* hovered/clicked */
+    --gray: #d0d0d0; /* uploaded just in case */
     --ink:  #2b2b2b;
+    --panel-border: #e3e8ec;
 }
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; height: 100%; }
 
 body {
     font-family: "Helvetica Neue", Arial, sans-serif;
     color: var(--ink);
-    margin: 32px auto;
-    max-width: 1040px;
-    padding: 0 20px;
 }
 
-h1 { margin-bottom: 4px; }
-h2 { font-size: 15px; margin: 22px 0 8px; }
+h1 { margin: 0 0 4px; font-size: 24px; }
+h2 { font-size: 15px; margin: 0 0 6px; }
 
-.subtitle { margin-top: 0; color: #666; }
+.subtitle { margin-top: 0; color: #666; font-size: 14px; }
+.subtitle ul { margin: 2px 0 0; padding-left: 20px; }
 
-.layout {
+/* Page frame (header on top; dashboard fills rest of window) */
+.app {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100vh;
+    padding: 16px 20px;
+    gap: 10px;
+}
+
+/* Map view create */
+.dashboard {
+    display: grid;
+    grid-template-columns: minmax(0, 68fr) minmax(340px, 32fr);
+    gap: 18px;
+    min-height: 0;
+}
+
+/* Map section */
+.map-column {
     display: flex;
-    gap: 28px;
-    align-items: flex-start;
+    flex-direction: column;
+    min-height: 0;
+    gap: 8px;
 }
 
+.toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 18px;
+    font-size: 14px;
+}
+
+#map-container {
+    position: relative; /* puts clicked house info sit on top of map */
+    flex: 1;
+    min-height: 0;
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    overflow: hidden;
+}
 #map-container svg { display: block; }
 
-/* ── Side panel ──────────────────────────────────────────────────────────── */
-.panel { width: 300px; font-size: 14px; }
-
-.legend div { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.legend { display: flex; gap: 14px; }
+.legend div { display: flex; align-items: center; gap: 8px; }
 .swatch { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
 .swatch.base  { background: var(--blue); }
 .swatch.hover { background: var(--pink); }
 
-.hint   { color: #555; line-height: 1.5; }
-.status { font-weight: bold; min-height: 1.2em; }
+.hint   { color: #555; line-height: 1.5; font-size: 13px; margin: 4px 0 0; }
+.status { font-weight: bold; min-height: 1.2em; margin: 0; flex-basis: 100%; }
 
 .swatch.faded { background: var(--blue); opacity: 0.18; }
 
-/* ── Buttons ─────────────────────────────────────────────────────────────── */
-.controls { display: flex; gap: 8px; margin: 12px 0; }
+/* Views section */
+.views {
+    display: grid;
+    grid-template-rows: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    min-height: 0;
+}
+
+.view-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding: 8px 10px 6px;
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+}
+.view-panel h2 { margin: 0 0 2px; font-size: 14px; }
+.view-panel .chart { flex: 1; min-height: 0; }
+.view-panel .chart svg { display: block; }
+.caption { margin: 2px 0 0; font-size: 11.5px; color: #666; line-height: 1.35; }
+
+.placeholder .chart {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #aaa;
+    font-size: 13px;
+}
+
+/* Pieces shared by smaller views */
+.axis text { font-size: 11px; fill: #555; }
+.axis path, .axis line { stroke: #bbb; }
+.axis-label { font-size: 11.5px; fill: #555; }
+.grid line { stroke: #eef1f4; }
+.grid path { display: none; }
+.brush .selection { fill: var(--pink); fill-opacity: 0.12; stroke: var(--pink); }
+.bar { cursor: pointer; }
+.none-strip { fill: #f3f5f7; }
+
+/* Constrol buttons */
+.controls { display: flex; gap: 8px; }
 
 button {
     font: inherit;
@@ -57,12 +132,29 @@ button:disabled { border-color: #ccc; color: #aaa; cursor: default; }
 #erase-btn:not(:disabled) { border-color: var(--pink); color: var(--pink); }
 #erase-btn:not(:disabled):hover { background: var(--pink); color: #fff; }
 
+/* Clicked house info (top left corner of map) */
+.details-card {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 1;
+    max-width: 280px;
+    padding: 8px 12px;
+    font-size: 13px;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    pointer-events: none; /* doesn't blocks hovering/lassoing  */
+}
+.details-card h2 { font-size: 13px; margin: 0 0 4px; }
 .details { line-height: 1.6; }
 .details b { display: inline-block; width: 130px; font-weight: normal; color: #666; }
 
-/* ── Tooltip (Lab 2, section 7.1) ────────────────────────────────────────── */
+/* Tooltip (Lab 2) */
 .tooltip {
     position: absolute;
+    top: 0;
+    left: 0;
     pointer-events: none;
     opacity: 0;
     background: rgba(0, 0, 0, 0.8);
@@ -73,10 +165,11 @@ button:disabled { border-color: #ccc; color: #aaa; cursor: default; }
     line-height: 1.45;
     white-space: nowrap;
     transition: opacity 0.15s ease;
+    z-index: 10;
 }
 .tooltip strong { color: var(--pink); }
 
-/* ── Map pieces ──────────────────────────────────────────────────────────── */
+/* Parts of map */
 .map-bg   { fill: #f6fafc; }
 .overlay  { fill: transparent; cursor: crosshair; }
 .lasso    {
@@ -84,7 +177,37 @@ button:disabled { border-color: #ccc; color: #aaa; cursor: default; }
     stroke: var(--pink);
     stroke-width: 1.5;
     stroke-dasharray: 4 3;
-    vector-effect: non-scaling-stroke;   /* outline stays thin when zoomed in */
+    vector-effect: non-scaling-stroke; /* outline stays thin when zoomed in */
     pointer-events: none;
 }
 .axis-note { font-size: 11px; fill: #888; }
+
+/* Landmark labels on the map (water in blue-gray, land in green-gray) */
+.landmark {
+    font-size: 13px;
+    font-style: italic;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    pointer-events: none;
+}
+.landmark.water { fill: #7aa7c7; }
+.landmark.land  { fill: #8aa37a; }
+.landmark.edge  { fill: #8aa37a; font-size: 11px; }
+
+/* Edge of development: dashed line through the westernmost houses */
+.edge-line {
+    fill: none;
+    stroke: #8aa37a;
+    stroke-width: 1.5;
+    stroke-dasharray: 6 4;
+    vector-effect: non-scaling-stroke; /* stays thin when zoomed in */
+    pointer-events: none;
+}
+
+/* Narrow screen accomodations (stacks views under map) */
+@media (max-width: 900px) {
+    .app { height: auto; }
+    .dashboard { grid-template-columns: 1fr; }
+    #map-container { height: 70vh; flex: none; }
+    .views { grid-template-rows: none; grid-auto-rows: 300px; }
+}
